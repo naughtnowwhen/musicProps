@@ -1,0 +1,71 @@
+{
+    "_comment": "Single source of truth for circuit component values",
+    "_units": "SI units: ohms, farads, henries, volts, amps",
+
+    "power": {
+        "v_supply": 12.0,
+        "v_logic": 15.0
+    },
+
+    "loop_filter": {
+        "r1": 100000,
+        "c1": 10e-6,
+        "c1_esr": 0.5,
+        "r2": 10000,
+        "c2": 100e-9
+    },
+
+    "signal_conditioner": {
+        "r8_input": 1000,
+        "r9_feedback": 100000,
+        "gain": -100,
+        "c_ac_coupling": 1e-6,
+        "vgnd_r1": 10000,
+        "vgnd_r2": 10000
+    },
+
+    "h_bridge": {
+        "q1_q3_type": "2N3055",
+        "q2_q4_type": "MJ2955",
+        "r_drive": 1000,
+        "r_bias": 4700,
+        "d1_d4_type": "1N4001"
+    },
+
+    "motor": {
+        "resistance": 20,
+        "inductance": 0.5e-3,
+        "ke_bemf": 0.05,
+        "kt_torque": 0.05,
+        "inertia": 1e-5,
+        "damping": 5e-6
+    },
+
+    "propeller": {
+        "num_blades": 12,
+        "diameter_m": 0.10,
+        "inertia": 2e-5
+    },
+
+    "magnetic_pickup": {
+        "sensitivity": 0.05,
+        "poles": 1
+    },
+
+    "pll": {
+        "type": "CD4046",
+        "phase_comparator": "PC1_XOR",
+        "vco_r1": 10000,
+        "vco_c1": 100e-9,
+        "vco_r2": 100000
+    },
+
+    "fault_parameters": {
+        "F001_c2_leakage_ohms": 3000,
+        "F002_q1_damage_ohms": 100,
+        "F003_noise_amplitude_v": 3,
+        "F003_noise_freq_hz": 15000,
+        "F004_r9_open_ohms": 100e6,
+        "F005_d2_short_ohms": 5
+    }
+}

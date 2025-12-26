@@ -60,7 +60,7 @@ class SpiceVoiceParams:
 
     # ===== Motor =====
     # Parameters tuned for 1320-2500 RPM operating range on 12V
-    motor_resistance: float = 2.0     # Ohms
+    motor_resistance: float = 20.0    # Ohms (matches SPICE R_MOTOR)
     motor_inductance: float = 0.5e-3  # Henries (0.5mH)
     motor_ke: float = 0.05            # V/(rad/s) - back-EMF constant
     motor_kt: float = 0.05            # N·m/A - torque constant (= Ke)
