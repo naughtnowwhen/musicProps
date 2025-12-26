@@ -1,0 +1,58 @@
+* OP-AMP CONDITIONER - SIMPLIFIED SPICE MODEL
+*
+* Focus: Clearly distinguishable signatures for F003 and F004
+*
+* HEALTHY: Gain = 101, output is 101x input, clipped to ±12V rails
+* F003: Output has noise superimposed (Vpp > 24V)
+* F004: Output saturated at +12V or -12V (Vpp = 24V exactly)
+
+* Power rails
+V_vcc vcc 0 DC 12
+V_vee vee 0 DC -12
+
+* Input: 50mV @ 220Hz (simulated pickup signal)
+V_in in 0 SIN(0 0.05 220)
+
+* === HEALTHY ===
+* Gain of 101, with rail clamping
+E_amp_h amp_h 0 in 0 101
+* Clamp to rails
+B_clamp_h out_h 0 V=min(max(V(amp_h),-12),12)
+
+* === F003: NOISY OP-AMP ===
+* Same gain but with noise source that causes overshoot
+E_amp_f3 amp_f3 0 in 0 101
+V_noise noise 0 SIN(0 3 15000)  ; 3V @ 15kHz noise
+B_clamp_f3 out_f3 0 V=min(max(V(amp_f3)+V(noise),-14),14)  ; Allows overshoot to ±14V
+
+* === F004: OPEN FEEDBACK ===
+* Infinite gain = output depends only on input polarity
+B_sat_f4 out_f4 0 V=12*sgn(V(in)+0.001)  ; Saturates based on input sign
+
+.control
+set filetype=ascii
+
+tran 10u 20m
+
+meas tran h_vpp PP v(out_h) FROM=15m TO=20m
+meas tran f3_vpp PP v(out_f3) FROM=15m TO=20m
+meas tran f4_vpp PP v(out_f4) FROM=15m TO=20m
+
+echo ""
+echo "=========================================="
+echo "OP-AMP CONDITIONER SPICE SIGNATURES"
+echo "=========================================="
+echo ""
+echo "HEALTHY:  Vpp = $&h_vpp V"
+echo "F003:     Vpp = $&f3_vpp V (noisy, overshoots)"
+echo "F004:     Vpp = $&f4_vpp V (saturated at rails)"
+echo ""
+echo "DIAGNOSTIC RULES:"
+echo "  Vpp < 24V, clean: HEALTHY"
+echo "  Vpp > 24V or noisy: F003 (Noisy Op-Amp)"
+echo "  Vpp = ~24V, square wave: F004 (Open Resistor)"
+
+wrdata opamp_simple.dat v(out_h) v(out_f3) v(out_f4)
+.endc
+
+.end

@@ -1,0 +1,51 @@
+* AeroTone Loop Filter - SPICE Reference Model
+*
+* This models the passive loop filter that smooths the phase detector output.
+* Configuration: Lag-Lead filter for PLL stability
+*
+* Circuit from SpiceVoiceParams:
+*   R1 = 100k (loop_r1)
+*   C1 = 10uF (loop_c1) - main integration capacitor
+*   R2 = 10k  (loop_r2) - lead resistor
+*   C2 = 100nF (loop_c2) - HF bypass
+*
+*                 R1
+*     IN o-------/\/\/\------+------o OUT
+*                            |
+*                     R2     |
+*                   /\/\/\   |
+*                     |      |
+*                    C2     C1
+*                     |      |
+*                    GND    GND
+
+* Parameters
+.param R1=100k
+.param C1=10u
+.param R2=10k
+.param C2=100n
+
+* HEALTHY CIRCUIT
+* Input: Phase detector output (square wave ~0-15V representing phase error)
+* For testing, use a pulse to simulate PLL lock acquisition
+
+V_supply vdd 0 DC 15
+Vin in 0 PULSE(0 10 0 1u 1u 5m 10m)  ; Square wave input
+
+R1 in node1 {R1}
+R2 node1 out {R2}
+C1 out 0 {C1} IC=0
+C2 node1 0 {C2}
+
+.control
+set filetype=ascii
+
+; Test 1: Step response (healthy)
+tran 10u 200m UIC
+wrdata loop_filter_healthy.dat v(out) v(in)
+
+; Print final steady-state value
+print v(out) at 200m
+.endc
+
+.end

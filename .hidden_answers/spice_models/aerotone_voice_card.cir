@@ -1,0 +1,252 @@
+* ============================================================================
+* AEROTONE MODEL 12 - VOICE CARD SPICE MODEL
+* ============================================================================
+*
+* This is the GOLD STANDARD reference model for the AeroTone voice card.
+* All Python simulations must be validated against this model.
+*
+* Circuit Overview:
+*   - CD4046 PLL controls motor speed via VCO
+*   - Loop filter smooths phase detector output
+*   - H-Bridge drives DC motor
+*   - Motor spins propeller, magnetic pickup senses blade passage
+*   - Signal conditioner amplifies pickup signal for feedback
+*
+* Target: 220Hz blade passage frequency (1100 RPM with 12 blades)
+*
+* ============================================================================
+
+* === POWER SUPPLIES ===
+V_supply v_supply 0 DC 12       ; Motor supply
+V_logic vdd 0 DC 15             ; Logic supply (CD4046)
+
+* === PARAMETERS ===
+.param target_freq=220          ; Target blade passage frequency (Hz)
+.param num_blades=12            ; Propeller blades
+
+* ============================================================================
+* LOOP FILTER - RC network that smooths phase detector output
+* ============================================================================
+*
+* Topology: Passive lag-lead filter
+*
+*              R1 (100k)
+*     IN o----/\/\/\----+----o OUT (to VCO)
+*                       |
+*                      C1 (10uF)
+*                       |
+*                      GND
+*
+* Time constant: tau = R1 * C1 = 100k * 10u = 1 second
+* This provides slow integration for PLL stability
+
+.subckt loop_filter in out
+R1 in out 100k
+C1 out 0 10u IC=7.5
+.ends
+
+* === F001: LEAKY CAPACITOR VARIANT ===
+* Degraded electrolytic with parallel leakage resistance
+.subckt loop_filter_f001 in out
+R1 in out 100k
+C1 out leak_node 10u IC=7.5
+R_leak leak_node 0 30k         ; Leakage resistance (~250uA at 7.5V)
+R_esr out leak_node 5           ; Increased ESR
+.ends
+
+* ============================================================================
+* H-BRIDGE MOTOR DRIVER
+* ============================================================================
+*
+* Simplified H-bridge using voltage-controlled switch model
+* Real circuit uses 2N3055 (NPN) and MJ2955 (PNP) transistors
+*
+*                    +V_supply (12V)
+*                         |
+*              +----------+----------+
+*              |                     |
+*           [Q1 NPN]              [Q3 NPN]
+*              |                     |
+*              +------- MOTOR -------+
+*              |                     |
+*           [Q2 PNP]              [Q4 PNP]
+*              |                     |
+*              +----------+----------+
+*                         |
+*                        GND
+*
+* Control: V_control (0-15V) maps to motor voltage (0-12V)
+
+.subckt hbridge_driver ctrl v_supply motor_p motor_n
+* Simplified: control voltage directly drives motor with saturation drops
+E_motor motor_p motor_n ctrl 0 0.8    ; 80% efficiency, ~2V drop in transistors
+.ends
+
+* === F002: BURNED TRANSISTOR Q1 ===
+* Damaged transistor has high series resistance, reduces drive capability
+.subckt hbridge_driver_f002 ctrl v_supply motor_p motor_n
+R_damaged ctrl ctrl_reduced 50k      ; High resistance from damaged junction
+E_motor motor_p motor_n ctrl_reduced 0 0.8
+.ends
+
+* === F005: SHORTED FLYBACK DIODE D2 ===
+* Shorted diode creates parallel current path
+.subckt hbridge_driver_f005 ctrl v_supply motor_p motor_n
+E_motor motor_p motor_n ctrl 0 0.5   ; Reduced voltage due to short
+R_short motor_p motor_n 10            ; Parallel resistance from shorted diode
+.ends
+
+* ============================================================================
+* DC MOTOR MODEL
+* ============================================================================
+*
+* Simplified DC motor: V = I*R + Ke*omega
+* Motor constants (typical small DC motor):
+*   - R = 2 ohms (winding resistance)
+*   - L = 0.5 mH (winding inductance)
+*   - Ke = 0.05 V/(rad/s) (back-EMF constant)
+*   - Kt = 0.05 Nm/A (torque constant, = Ke for ideal motor)
+*   - J = 10e-6 kg*m^2 (rotor inertia)
+*   - B = 5e-6 Nm/(rad/s) (friction)
+
+.subckt dc_motor v_plus v_minus omega_out
+* Electrical: V = I*R + L*dI/dt + Ke*omega
+R_winding v_plus node1 2
+L_winding node1 node2 0.5m
+* Back-EMF: E = Ke * omega (represented as voltage source)
+* For simulation, we use a behavioral source
+E_bemf node2 v_minus omega_out 0 0.05
+
+* Mechanical: J*d(omega)/dt = Kt*I - B*omega - T_load
+* Current sensing for torque calculation
+V_sense v_minus 0 DC 0
+* Omega output (simplified - would need integration in real model)
+.ends
+
+* ============================================================================
+* SIGNAL CONDITIONER (Op-Amp U2 = LM358)
+* ============================================================================
+*
+* Non-inverting amplifier with gain = 1 + R9/R8 = 1 + 100k/1k = 101
+*
+*                    +Vcc (12V)
+*                       |
+*                  +---------+
+*     pickup --+---|+        |
+*              |   |  LM358  |---+--- output
+*              +---|−        |   |
+*              |   +---------+   |
+*              |       |         |
+*             R8      -Vcc      R9
+*             1k     (-12V)    100k
+*              |                 |
+*             GND               (feedback)
+
+.subckt signal_conditioner in out vcc vee
+* Simplified op-amp model with gain and rail limits
+R_in in inp 1k
+E_amp out_int 0 inp 0 100       ; Gain of 100
+R_out out_int out 100
+* Rail limiting (simplified)
+D_pos out vcc dclamp
+D_neg vee out dclamp
+.model dclamp D(Is=1e-14 Rs=1)
+.ends
+
+* === F003: NOISY OP-AMP ===
+* Internal noise source and reduced stability
+.subckt signal_conditioner_f003 in out vcc vee
+R_in in inp 1k
+* Add noise source
+V_noise inp inp_noisy SIN(0 0.5 10k)  ; 10kHz noise
+E_amp out_int 0 inp_noisy 0 100
+R_out out_int out 100
+D_pos out vcc dclamp
+D_neg vee out dclamp
+.model dclamp D(Is=1e-14 Rs=1)
+.ends
+
+* === F004: OPEN FEEDBACK RESISTOR R9 ===
+* Infinite gain causes rail-to-rail saturation
+.subckt signal_conditioner_f004 in out vcc vee
+* With open feedback, output saturates based on input polarity
+E_sat out 0 in 0 1e6             ; Very high gain
+D_pos out vcc dclamp
+D_neg vee out dclamp
+.model dclamp D(Is=1e-14 Rs=1)
+.ends
+
+* ============================================================================
+* MAGNETIC PICKUP
+* ============================================================================
+* Generates voltage pulses as propeller blades pass
+* Output: ~50mV pulses at blade passage frequency
+
+.subckt magnetic_pickup blade_angle out
+* Simplified: sine wave at blade frequency (would be pulse in reality)
+* For testing, use fixed 220Hz
+V_pickup out 0 SIN(0 0.05 220)
+.ends
+
+* ============================================================================
+* COMPLETE VOICE CARD - HEALTHY
+* ============================================================================
+
+.subckt voice_card_healthy ref_in motor_voltage_out cond_out loop_filter_out
+* Reference frequency input (from master oscillator)
+* For testing, use 220Hz square wave representing target frequency
+
+* Phase detector output (simplified - assumes locked PLL)
+* In steady state, outputs ~7.5V (mid-rail) with small ripple
+V_pd pd_out 0 DC 7.5 AC 0.1
+
+* Loop filter
+X_loopfilter pd_out loop_filter_out loop_filter
+
+* H-Bridge driver
+X_hbridge loop_filter_out v_supply motor_p 0 hbridge_driver
+
+* Motor (simplified - just shows voltage across motor)
+R_motor motor_p motor_voltage_out 2
+V_motor_gnd motor_voltage_out 0 DC 0
+
+* Signal conditioner
+X_cond pickup_raw cond_out vdd vee signal_conditioner
+V_vee vee 0 DC -12
+
+* Magnetic pickup (simulated blade passage)
+X_pickup blade_angle pickup_raw magnetic_pickup
+V_blade blade_angle 0 DC 0
+
+.ends
+
+* ============================================================================
+* TEST CIRCUIT
+* ============================================================================
+
+* Instantiate healthy voice card
+X_voice ref_in motor_v cond_out lf_out voice_card_healthy
+V_ref ref_in 0 PULSE(0 15 0 1u 1u 2.27m 4.54m)  ; 220Hz reference
+
+.control
+set filetype=ascii
+
+* Run transient analysis
+tran 10u 100m UIC
+
+* Measure key values at steady state
+meas tran lf_dc AVG v(lf_out) FROM=80m TO=100m
+meas tran lf_ac_pp PP v(lf_out) FROM=80m TO=100m
+meas tran motor_dc AVG v(motor_v) FROM=80m TO=100m
+meas tran cond_pp PP v(cond_out) FROM=80m TO=100m
+
+echo ""
+echo "=== AEROTONE VOICE CARD - SPICE REFERENCE VALUES ==="
+echo "Loop Filter:    DC=$&lf_dc V, Ripple=$&lf_ac_pp Vpp"
+echo "Motor Voltage:  DC=$&motor_dc V"
+echo "Conditioner:    Vpp=$&cond_pp V"
+
+wrdata voice_card_healthy.dat v(lf_out) v(motor_v) v(cond_out)
+.endc
+
+.end

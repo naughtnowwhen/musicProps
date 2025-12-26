@@ -1,0 +1,186 @@
+* ============================================================================
+* SIGNAL CONDITIONER OP-AMP - SPICE MODEL
+* ============================================================================
+*
+* Models the LM358 op-amp signal conditioner.
+* Includes healthy and faulty variants (F003, F004).
+*
+* Circuit: Non-inverting amplifier
+*
+*                    +Vcc (+12V)
+*                        |
+*                   +---------+
+*    pickup ---+----|+        |
+*              |    |  LM358  |----+---- output
+*              |    |−        |    |
+*              |    +---------+    |
+*              |        |          |
+*             R8       -Vcc       R9
+*             1k      (-12V)     100k
+*              |                   |
+*             GND            (feedback to −)
+*
+* Gain = 1 + R9/R8 = 1 + 100k/1k = 101
+*
+* Healthy: Clean square wave output, ±12V rails
+* F003 (Noisy): Output has noise, may overshoot rails
+* F004 (Open R9): Infinite gain → saturated at rails
+*
+* ============================================================================
+
+* === LM358 OP-AMP MODEL (simplified) ===
+* Gain-bandwidth: 1 MHz
+* Slew rate: 0.3 V/µs
+* Output swing: Rail-to-rail (approximately)
+
+.model opamp_ideal vcvs (gain=1e6)
+
+* ============================================================================
+* HEALTHY SIGNAL CONDITIONER
+* ============================================================================
+
+.subckt conditioner_healthy in out vcc vee
+* Input resistor
+R_in in inp 1k
+
+* Feedback network
+R_fb out fb 100k
+R_fb_gnd fb 0 1k    ; Gain-setting resistor to ground
+
+* Op-amp (simplified behavioral model)
+* Output = A * (V+ - V-) where A is very high
+* With feedback: V_out = V_in * (1 + R_fb/R_fb_gnd)
+E_amp out_raw 0 inp fb 100000
+
+* Rail limiting
+R_out out_raw out_lim 10
+* Clamp to rails using diodes
+D_pos out_lim vcc dclamp
+D_neg vee out_lim dclamp
+.model dclamp D(Is=1e-14 Rs=0.1)
+
+* Output buffer
+R_outbuf out_lim out 100
+
+.ends
+
+* ============================================================================
+* F003: NOISY OP-AMP
+* ============================================================================
+* Internal noise causes output to overshoot rails and have high-frequency noise
+
+.subckt conditioner_f003 in out vcc vee
+* Input resistor
+R_in in inp 1k
+
+* Feedback network
+R_fb out fb 100k
+R_fb_gnd fb 0 1k
+
+* Noisy op-amp: Add noise source in signal path
+V_noise inp inp_noisy SIN(0 0.3 15k)  ; 15kHz internal oscillation
+
+* Op-amp with some instability
+E_amp out_raw 0 inp_noisy fb 100000
+
+* Rail limiting (but with overshoot due to instability)
+R_out out_raw out_lim 10
+* Weaker clamping allows overshoot
+D_pos out_lim vcc dclamp_weak
+D_neg vee out_lim dclamp_weak
+.model dclamp_weak D(Is=1e-12 Rs=1)
+
+* Add ringing/overshoot
+L_ring out_lim out_ring 10u
+C_ring out_ring 0 1n
+R_ring out_ring out 100
+
+.ends
+
+* ============================================================================
+* F004: OPEN FEEDBACK RESISTOR R9
+* ============================================================================
+* No feedback = infinite gain = output saturates at rails
+
+.subckt conditioner_f004 in out vcc vee
+* Input resistor
+R_in in inp 1k
+
+* NO FEEDBACK (R_fb is open circuit)
+* This means the op-amp has open-loop gain (~100,000)
+* Any input will saturate the output to rails
+
+* Op-amp with no feedback
+E_amp out_raw 0 inp 0 100000  ; No negative feedback
+
+* Rail limiting
+R_out out_raw out_lim 10
+D_pos out_lim vcc dclamp
+D_neg vee out_lim dclamp
+.model dclamp D(Is=1e-14 Rs=0.1)
+
+R_outbuf out_lim out 100
+
+.ends
+
+* ============================================================================
+* TEST CIRCUIT
+* ============================================================================
+
+* Power supplies
+V_vcc vcc 0 DC 12
+V_vee vee 0 DC -12
+
+* Input: Simulated magnetic pickup signal
+* Small AC signal (~50mV) at blade passage frequency (220Hz)
+V_pickup in 0 SIN(0 0.05 220)
+
+* Instantiate all three variants
+X_healthy in out_h vcc vee conditioner_healthy
+X_f003 in out_f3 vcc vee conditioner_f003
+X_f004 in out_f4 vcc vee conditioner_f004
+
+.control
+set filetype=ascii
+
+* Transient analysis for one period of 220Hz
+tran 1u 20m UIC
+
+* Measure output characteristics
+meas tran h_vpp PP v(out_h) FROM=15m TO=20m
+meas tran h_vavg AVG v(out_h) FROM=15m TO=20m
+
+meas tran f3_vpp PP v(out_f3) FROM=15m TO=20m
+meas tran f3_vavg AVG v(out_f3) FROM=15m TO=20m
+
+meas tran f4_vpp PP v(out_f4) FROM=15m TO=20m
+meas tran f4_vavg AVG v(out_f4) FROM=15m TO=20m
+
+echo ""
+echo "=========================================="
+echo "SIGNAL CONDITIONER SPICE REFERENCE VALUES"
+echo "=========================================="
+echo "Input: 50mV sine wave @ 220Hz"
+echo "Expected gain: 101x (output ~5V amplitude)"
+echo ""
+echo "HEALTHY:"
+echo "  Vpp = $&h_vpp (expect ~10V, may clip)"
+echo "  Vavg = $&h_vavg (expect ~0V)"
+echo ""
+echo "F003 (Noisy Op-Amp):"
+echo "  Vpp = $&f3_vpp (expect >24V with overshoot)"
+echo "  Vavg = $&f3_vavg"
+echo ""
+echo "F004 (Open Feedback Resistor):"
+echo "  Vpp = $&f4_vpp (expect ~24V, saturated)"
+echo "  Vavg = $&f4_vavg (expect ~0V)"
+echo ""
+echo "DIAGNOSTIC SIGNATURES:"
+echo "  HEALTHY: Vpp = ~10-24V, clean edges"
+echo "  F003: Vpp > 24V (overshoots rails), noisy"
+echo "  F004: Vpp = ~24V exactly (saturated at rails)"
+
+wrdata opamp_test.dat v(out_h) v(out_f3) v(out_f4)
+.endc
+
+.end

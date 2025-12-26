@@ -1,0 +1,61 @@
+* F001 Comparison: HEALTHY vs LEAKY CAPACITOR
+*
+* Test: Apply 7.5V step (mid-rail PLL lock voltage) and observe settling
+*
+* HEALTHY: Capacitor holds charge, minimal ripple
+* LEAKY: Voltage drifts toward 0V due to leakage, higher ripple
+
+.param R1=100k
+.param C1=10u
+
+*=== SUBCIRCUITS ===
+
+* Healthy RC filter
+.subckt healthy_filter in out
+R1 in out 100k
+C1 out 0 10u IC=7.5
+.ends
+
+* Leaky capacitor filter (30k leakage = ~250uA at 7.5V)
+.subckt leaky_filter in out
+R1 in out 100k
+C1 out leak 10u IC=7.5
+R_leak leak 0 30k
+.ends
+
+*=== TEST CIRCUIT ===
+
+* Step input representing PLL lock voltage
+Vin in 0 DC 7.5
+
+* Instantiate both filters for comparison
+Xhealthy in out_healthy healthy_filter
+Xleaky in out_leaky leaky_filter
+
+.control
+set filetype=ascii
+
+* Run transient - observe capacitor discharge/behavior
+* No input change - just see if capacitor holds voltage
+tran 100u 100m UIC
+
+* Write comparison data
+wrdata f001_compare.dat v(out_healthy) v(out_leaky)
+
+* Measure at key times
+meas tran v_h_10m FIND v(out_healthy) AT=10m
+meas tran v_l_10m FIND v(out_leaky) AT=10m
+meas tran v_h_50m FIND v(out_healthy) AT=50m
+meas tran v_l_50m FIND v(out_leaky) AT=50m
+meas tran v_h_100m FIND v(out_healthy) AT=100m
+meas tran v_l_100m FIND v(out_leaky) AT=100m
+
+echo ""
+echo "=== F001 SPICE COMPARISON ==="
+echo "Time     Healthy    Leaky      Difference"
+echo "10ms:    $&v_h_10m  $&v_l_10m"
+echo "50ms:    $&v_h_50m  $&v_l_50m"
+echo "100ms:   $&v_h_100m $&v_l_100m"
+.endc
+
+.end

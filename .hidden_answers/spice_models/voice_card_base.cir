@@ -1,0 +1,103 @@
+* ============================================================================
+* AEROTONE VOICE CARD - BASE SPICE MODEL
+* ============================================================================
+*
+* This is the HEALTHY baseline circuit. Fault variants modify specific
+* components to simulate failures.
+*
+* Circuit Blocks:
+*   1. Power Supplies (12V motor, 15V logic)
+*   2. Loop Filter (R3=100k, C2=10uF) - smooths phase detector output
+*   3. H-Bridge Motor Driver (Q1-Q4, D1-D4)
+*   4. Signal Conditioner (U2=LM358, R8=1k, R9=100k)
+*
+* ============================================================================
+
+* === PARAMETERS (can be overridden for fault injection) ===
+.param V_motor_supply = 12
+.param V_logic_supply = 15
+.param R_loop = 100k
+.param C_loop = 10u
+.param C_loop_leakage = 1G      ; Healthy: very high (no leakage)
+.param R_motor_winding = 2
+.param R_transistor_damage = 0  ; Healthy: 0 ohms extra resistance
+.param R_diode_short = 1G       ; Healthy: very high (no short)
+.param R_feedback = 100k        ; R9 feedback resistor
+.param R_input = 1k             ; R8 input resistor
+.param opamp_noise = 0          ; Healthy: no noise
+
+* === POWER SUPPLIES ===
+V_supply supply_pos 0 DC {V_motor_supply}
+V_logic logic_pos 0 DC {V_logic_supply}
+
+* === LOOP FILTER ===
+* Models the RC filter that smooths phase detector output
+* Input: phase detector pulses (simplified as DC + AC ripple)
+* Output: smooth DC control voltage
+
+V_pd pd_out 0 DC 7.5 SIN(0 0.5 220)  ; Phase detector output (simplified)
+
+R3 pd_out lf_node {R_loop}
+C2 lf_node lf_leak {C_loop} IC=7.5
+R_leak lf_leak 0 {C_loop_leakage}  ; Leakage path (very high when healthy)
+
+* === H-BRIDGE (Simplified behavioral model) ===
+* Control voltage drives motor through transistor saturation drops
+
+* High-side transistor Q1 (may have damage resistance)
+R_q1_damage lf_node q1_out {R_transistor_damage + 0.001}
+
+* Motor drive calculation
+* V_motor = (control/12) * (12 - 2*Vsat) - losses
+E_motor_drive motor_drv 0 q1_out 0 0.88  ; ~10.6V/12V ratio
+
+* Motor model: resistance + back-EMF
+R_motor motor_drv motor_mid {R_motor_winding}
+V_bemf motor_mid motor_neg DC 5.75  ; Back-EMF at 1100 RPM
+
+* Flyback diode D2 (may be shorted)
+R_d2_short motor_drv motor_neg {R_diode_short}
+
+* Current sensing
+V_i_sense motor_neg 0 DC 0
+
+* === SIGNAL CONDITIONER (Op-amp with gain stage) ===
+* Pickup signal -> amplified square wave for PLL feedback
+
+V_pickup pickup 0 SIN(0 0.05 220)  ; 50mV magnetic pickup signal
+
+* Non-inverting amplifier: gain = 1 + R9/R8 = 101
+* Simplified behavioral model
+R8 pickup opamp_in {R_input}
+E_opamp opamp_out_raw 0 opamp_in 0 {100k/{R_feedback}*100 + 1}
+
+* Rail limiting (±12V)
+B_rail_limit cond_out 0 V=min(max(V(opamp_out_raw),-12),12)
+
+* === ANALYSIS ===
+.control
+set filetype=ascii
+
+* Transient analysis
+tran 10u 50m UIC
+
+* Measurements (steady state: last 10ms)
+meas tran loop_filter_dc AVG v(lf_node) FROM=40m TO=50m
+meas tran loop_filter_ripple PP v(lf_node) FROM=40m TO=50m
+meas tran motor_voltage AVG v(motor_drv)-v(motor_neg) FROM=40m TO=50m
+meas tran motor_current AVG i(V_i_sense) FROM=40m TO=50m
+meas tran cond_vpp PP v(cond_out) FROM=40m TO=50m
+meas tran cond_vavg AVG v(cond_out) FROM=40m TO=50m
+
+* Output results
+echo ""
+echo "=========================================="
+echo "SPICE MEASUREMENT RESULTS"
+echo "=========================================="
+echo ""
+print loop_filter_dc loop_filter_ripple
+print motor_voltage motor_current
+print cond_vpp cond_vavg
+
+.endc
+.end

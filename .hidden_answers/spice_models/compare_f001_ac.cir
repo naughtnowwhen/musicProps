@@ -1,0 +1,65 @@
+* F001 Comparison: HEALTHY vs LEAKY - AC Response
+*
+* The PLL phase detector outputs pulses when there's a phase error.
+* The loop filter integrates these pulses to create the VCO control voltage.
+*
+* A healthy capacitor smooths the pulses with low ripple.
+* A leaky capacitor has worse ripple rejection.
+
+.param R1=100k
+.param C1=10u
+
+* Phase detector output simulation:
+* When locked: small pulses around DC operating point
+* Simulated as: DC bias + small AC ripple
+
+*=== SUBCIRCUITS ===
+
+.subckt healthy_filter in out
+R1 in out 100k
+C1 out 0 10u IC=7.5
+.ends
+
+* Leaky capacitor (30k leakage resistance)
+.subckt leaky_filter in out
+R1 in out 100k
+C1 out leak 10u IC=7.5
+R_leak leak 0 30k
+.ends
+
+*=== TEST CIRCUIT ===
+
+* Input: DC bias (7.5V) + AC ripple representing phase error pulses
+* Phase detector might produce ~1V ripple at ~200Hz when locked
+Vdc in_dc 0 DC 7.5
+Vac in_dc in SIN(0 1 200)
+
+Xhealthy in out_healthy healthy_filter
+Xleaky in out_leaky leaky_filter
+
+.control
+set filetype=ascii
+
+* Run long enough to see AC steady state
+tran 10u 100m UIC
+
+wrdata f001_ac_compare.dat v(out_healthy) v(out_leaky) v(in)
+
+* Measure ripple (peak-to-peak in last 20ms when settled)
+meas tran vpp_h PP v(out_healthy) FROM=80m TO=100m
+meas tran vpp_l PP v(out_leaky) FROM=80m TO=100m
+meas tran vavg_h AVG v(out_healthy) FROM=80m TO=100m
+meas tran vavg_l AVG v(out_leaky) FROM=80m TO=100m
+
+echo ""
+echo "=== F001 SPICE AC COMPARISON ==="
+echo "Input: 7.5V DC + 1V AC @ 200Hz"
+echo ""
+echo "             HEALTHY    LEAKY"
+echo "Vavg:        $&vavg_h   $&vavg_l"
+echo "Vpp ripple:  $&vpp_h    $&vpp_l"
+echo ""
+echo "Ripple ratio (leaky/healthy): calculate vpp_l/vpp_h"
+.endc
+
+.end

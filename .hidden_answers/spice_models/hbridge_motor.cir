@@ -1,0 +1,159 @@
+* ============================================================================
+* H-BRIDGE MOTOR DRIVER - SPICE MODEL
+* ============================================================================
+*
+* Models the H-bridge motor driver with DC motor.
+* Includes healthy and faulty variants (F002, F005).
+*
+* H-Bridge Topology:
+*
+*                     +V_supply (12V)
+*                          |
+*               +----------+----------+
+*               |                     |
+*            [Q1 NPN]    D1 ↑     [Q3 NPN]    D3 ↑
+*               |          |          |          |
+*               +----+-----+    +-----+----+
+*                    |               |
+*                   MOTOR (2Ω, 0.5mH)
+*                    |               |
+*               +----+-----+    +-----+----+
+*               |          |          |          |
+*            [Q2 PNP]    D2 ↓     [Q4 PNP]    D4 ↓
+*               |                     |
+*               +----------+----------+
+*                          |
+*                         GND
+*
+* Simplified model: Control voltage (0-12V) drives motor directly
+* through transistor saturation voltage drops (~0.7V each).
+*
+* Motor Model:
+*   V_motor = I * R + L * dI/dt + Ke * omega
+*   At steady state: V_motor = I * R + Ke * omega
+*   With omega ≈ 1100 RPM = 115 rad/s, Ke = 0.05 V/(rad/s)
+*   Back EMF = 0.05 * 115 = 5.75V
+*
+* ============================================================================
+
+.param V_supply=12
+.param V_sat=0.7        ; Transistor saturation voltage
+.param R_motor=2        ; Motor winding resistance (ohms)
+.param L_motor=0.5m     ; Motor inductance (H)
+.param Ke=0.05          ; Back-EMF constant V/(rad/s)
+.param omega=115        ; Steady-state speed (rad/s) for 220Hz BPF
+
+* Back-EMF voltage at steady state
+.param V_bemf={Ke*omega}
+
+* ============================================================================
+* HEALTHY H-BRIDGE
+* ============================================================================
+
+.subckt hbridge_healthy ctrl motor_plus motor_minus i_sense
+* Control voltage scales V_supply, minus transistor drops
+* V_motor = (ctrl/V_supply) * (V_supply - 2*V_sat)
+E_drive node_drive 0 ctrl 0 {(V_supply - 2*V_sat)/V_supply}
+
+* Motor model: R + L in series with back-EMF
+R_motor node_drive node_L {R_motor}
+L_motor node_L motor_plus {L_motor}
+E_bemf motor_plus motor_minus VALUE={V_bemf}
+
+* Current sensing
+V_sense motor_minus i_sense DC 0
+R_gnd i_sense 0 1m
+.ends
+
+* ============================================================================
+* F002: BURNED TRANSISTOR Q1
+* ============================================================================
+* Damaged transistor has high collector-emitter resistance
+* This acts as a voltage divider, reducing motor voltage
+
+.subckt hbridge_f002 ctrl motor_plus motor_minus i_sense
+* Damaged transistor adds series resistance (e.g., 100 ohms)
+.param R_damaged=100
+
+* Voltage divider effect: V_eff = ctrl * R_motor / (R_motor + R_damaged)
+* Actually, damaged transistor limits current, causing voltage drop
+E_drive node_drive 0 ctrl 0 {(V_supply - 2*V_sat)/V_supply}
+R_damaged node_drive node_motor {R_damaged}
+
+* Motor model
+R_motor node_motor node_L {R_motor}
+L_motor node_L motor_plus {L_motor}
+E_bemf motor_plus motor_minus VALUE={V_bemf * 0.6}  ; Lower speed due to reduced drive
+
+* Current sensing
+V_sense motor_minus i_sense DC 0
+R_gnd i_sense 0 1m
+.ends
+
+* ============================================================================
+* F005: SHORTED FLYBACK DIODE D2
+* ============================================================================
+* Shorted diode creates parallel current path
+* This reduces voltage to motor but increases total current
+
+.subckt hbridge_f005 ctrl motor_plus motor_minus i_sense
+* Shorted diode: parallel resistance across part of H-bridge
+.param R_short=5        ; Effective resistance of shorted diode
+
+E_drive node_drive 0 ctrl 0 {(V_supply - 2*V_sat)/V_supply}
+
+* Shorted diode creates parallel path
+R_short node_drive node_short {R_short}
+R_motor node_short node_L {R_motor}
+L_motor node_L motor_plus {L_motor}
+E_bemf motor_plus motor_minus VALUE={V_bemf * 0.7}  ; Reduced speed
+
+* Current sensing - now sees both motor current AND short current
+V_sense motor_minus i_sense DC 0
+R_gnd i_sense 0 1m
+.ends
+
+* ============================================================================
+* TEST CIRCUIT
+* ============================================================================
+
+* Test with typical control voltage (~7.5V for steady-state operation)
+V_ctrl ctrl 0 DC 7.5
+
+* Instantiate all three variants
+X_healthy ctrl motor_h_plus motor_h_minus i_h hbridge_healthy
+X_f002 ctrl motor_f2_plus motor_f2_minus i_f2 hbridge_f002
+X_f005 ctrl motor_f5_plus motor_f5_minus i_f5 hbridge_f005
+
+.control
+set filetype=ascii
+
+* DC operating point analysis
+op
+
+* Measure motor voltages and currents
+echo ""
+echo "=== H-BRIDGE MOTOR - SPICE REFERENCE VALUES ==="
+echo "Control voltage: 7.5V (mid-rail, typical locked PLL)"
+echo ""
+echo "HEALTHY:"
+print v(motor_h_plus) - v(motor_h_minus)
+print i(V_sense)
+
+echo ""
+echo "F002 (Burned Transistor Q1):"
+print v(motor_f2_plus) - v(motor_f2_minus)
+print i(X_f002.V_sense)
+
+echo ""
+echo "F005 (Shorted Diode D2):"
+print v(motor_f5_plus) - v(motor_f5_minus)
+print i(X_f005.V_sense)
+
+* Transient for more detailed analysis
+tran 10u 10m UIC
+wrdata hbridge_test.dat v(motor_h_plus)-v(motor_h_minus) v(motor_f2_plus)-v(motor_f2_minus) v(motor_f5_plus)-v(motor_f5_minus)
+
+.endc
+
+.end

@@ -1,0 +1,162 @@
+* AEROTONE MODEL 12 VOICE CARD - REAL COMPONENT SIMULATION
+* PLL-based motor speed controller with actual component models
+*
+* This is a REAL circuit simulation, not behavioral shortcuts
+
+.INCLUDE real_components.lib
+
+*==============================================================
+* POWER SUPPLIES
+*==============================================================
+V_SUPPLY vcc 0 DC 12
+V_LOGIC vdd 0 DC 15
+
+*==============================================================
+* REFERENCE OSCILLATOR (220Hz reference signal)
+* Simulates the master clock/reference frequency
+*==============================================================
+V_REF ref_in 0 PULSE(0 15 0 10N 10N 2.27M 4.545M)
+
+*==============================================================
+* MOTOR TACHOMETER FEEDBACK
+* Magnetic pickup from motor - generates signal proportional to speed
+* In steady state, should match reference frequency
+*==============================================================
+V_TACH tach_raw 0 SIN(0 50M 220 0 0)
+
+*==============================================================
+* SIGNAL CONDITIONER (U2: LM358 Op-Amp)
+* Inverting amplifier configuration
+* Gain = -R9/R8 = -100k/1k = -100
+* Biased at VDD/2 = 7.5V for single-supply operation
+*==============================================================
+* Reference voltage (VDD/2 = 7.5V)
+R_VG1 vdd vgnd 10K
+R_VG2 vgnd 0 10K
+C_BIAS vgnd 0 10U IC=7.5
+
+* Input resistor R8 (with DC blocking)
+C_AC tach_raw tach_ac 1U
+R8 tach_ac opamp_inn 1K
+
+* Feedback resistor R9
+R9 opamp_inn cond_out 100K
+
+* LM358 Op-amp (U2) - inverting configuration
+* (+) input to reference, (-) input to summing junction
+* Pins: INP INN VCC VEE OUT
+X_U2 vgnd opamp_inn vdd 0 cond_out LM358
+
+* Bypass capacitor C3 on op-amp supply
+X_C3 vdd 0 CAP_CER_100N
+
+*==============================================================
+* COMPARATOR (converts conditioned signal to digital)
+* Part of CD4046 input stage
+*==============================================================
+* Simple comparator using threshold at virtual ground (7.5V)
+B_COMP comp_out 0 V=(V(cond_out) > V(vgnd) ? 15 : 0)
+
+*==============================================================
+* PHASE DETECTOR (CD4046 Phase Comparator)
+* Compares reference to feedback, outputs correction signal
+*==============================================================
+* XOR-style phase detector
+B_PHASE_DET pd_out 0 V=abs(V(ref_in)-V(comp_out))/15 * 15
+
+*==============================================================
+* LOOP FILTER (R3 + C2)
+* Integrates phase error to produce motor drive voltage
+* R3 = 100k, C2 = 10uF (with ESR)
+*==============================================================
+R3 pd_out loop_filt 100K
+X_C2 loop_filt 0 CAP_ELEC_10U
+
+*==============================================================
+* H-BRIDGE MOTOR DRIVER
+* Q1, Q3: 2N3055 NPN (high-side)
+* Q2, Q4: MJ2955 PNP (low-side)
+* D1-D4: 1N4001 flyback diodes
+*==============================================================
+
+* Drive signal conditioning
+* Convert loop filter voltage (0-15V) to H-bridge drive
+R_DRIVE1 loop_filt base_q1 1K
+R_DRIVE2 loop_filt base_q2 1K
+
+* Bias resistors
+R_BIAS1 vcc base_q1 4.7K
+R_BIAS2 base_q2 0 4.7K
+
+* HIGH-SIDE: Q1 (2N3055 NPN) - drives motor positive
+Q1 vcc base_q1 motor_p 2N3055
+
+* LOW-SIDE: Q2 (MJ2955 PNP) - sinks motor current
+Q2 motor_n base_q2 0 MJ2955
+
+* Complementary pair for other half of H-bridge
+R_DRIVE3 loop_filt base_q3 1K
+R_DRIVE4 loop_filt base_q4 1K
+R_BIAS3 vcc base_q3 4.7K
+R_BIAS4 base_q4 0 4.7K
+
+Q3 vcc base_q3 motor_n 2N3055
+Q4 motor_p base_q4 0 MJ2955
+
+* FLYBACK DIODES (D1-D4)
+* Protect transistors from inductive kickback
+D1 motor_p vcc 1N4001
+D2 0 motor_p 1N4001
+D3 motor_n vcc 1N4001
+D4 0 motor_n 1N4001
+
+*==============================================================
+* DC MOTOR MODEL
+* Simplified DC motor: resistance + back-EMF
+* R_motor = 20 ohms, generates back-EMF proportional to speed
+*==============================================================
+R_MOTOR motor_p motor_bemf 20
+V_BEMF motor_bemf motor_n DC 0
+* Back-EMF would normally be speed-dependent
+* For simulation, we model it as ~5V at operating speed
+
+* Current sense resistor (for measurement)
+R_SENSE motor_n motor_gnd 0.1
+V_SENSE motor_gnd 0 DC 0
+
+*==============================================================
+* ANALYSIS
+*==============================================================
+.OPTIONS RELTOL=0.01 ABSTOL=1N VNTOL=1M ITL1=500 ITL4=100
+
+.CONTROL
+set filetype=ascii
+
+* Let circuit settle then run transient
+TRAN 1U 100M UIC
+
+* Plot key waveforms
+WRDATA aerotone_real_healthy.dat V(loop_filt) V(motor_p,motor_n) I(V_SENSE) V(cond_out) V(tach_raw) V(opamp_inn) V(vgnd)
+
+* Print DC operating point info
+OP
+PRINT ALL
+
+* Measurements
+MEAS TRAN loop_dc AVG V(loop_filt) FROM=80M TO=100M
+MEAS TRAN loop_rip PP V(loop_filt) FROM=80M TO=100M
+MEAS TRAN motor_v AVG V(motor_p,motor_n) FROM=80M TO=100M
+MEAS TRAN motor_i AVG I(V_SENSE) FROM=80M TO=100M
+MEAS TRAN cond_vpp PP V(cond_out) FROM=80M TO=100M
+
+ECHO "==================================="
+ECHO "HEALTHY CIRCUIT MEASUREMENTS"
+ECHO "==================================="
+ECHO "Loop Filter DC: $&loop_dc V"
+ECHO "Loop Filter Ripple: $&loop_rip V"
+ECHO "Motor Voltage: $&motor_v V"
+ECHO "Motor Current: $&motor_i A"
+ECHO "Conditioner Vpp: $&cond_vpp V"
+
+.ENDC
+.END

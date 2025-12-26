@@ -1,0 +1,96 @@
+AEROTONE FAULT INJECTION ANALYSIS
+============================================================
+
+This report documents the behavior of the AeroTone voice card
+under three different component failure scenarios.
+
+============================================================
+FAULT DIAGNOSTIC REPORT
+Generated: 2025-12-24 18:30:19
+============================================================
+
+FAULT: Leaky Loop Filter Capacitor (C1)
+----------------------------------------
+Description: The 10uF electrolytic capacitor in the PLL loop filter has developed high leakage current due to age. This prevents the loop filter from holding the control voltage steady.
+Physical Cause: Electrolytic capacitor aging (dried electrolyte), heat damage, or exceeded voltage rating causing dielectric breakdown
+
+EXPECTED SYMPTOMS:
+  - Pitch instability (warbling/oscillation)
+  - Slow pitch drift between notes
+  - Poor phase lock - rough/buzzy tone
+  - Audible low-frequency modulation
+
+AUDIO ANALYSIS:
+----------------------------------------
+  RMS Level: 0.4109
+  Peak Level: 0.8000
+  Crest Factor: 1.95
+  Zero Crossing Rate: 314 Hz
+  DC Offset: 0.068133
+  Noise Floor: 0.043269
+  Clipping Samples: 0
+
+AUDIO FILE: /Users/petermurphy/codingHome/PPI/emulation/musicProps/fault_injection_output/fault_leaky_capacitor.wav
+
+============================================================
+
+============================================================
+FAULT DIAGNOSTIC REPORT
+Generated: 2025-12-24 18:31:44
+============================================================
+
+FAULT: Burned H-Bridge Transistor (Q1)
+----------------------------------------
+Description: High-side power transistor Q1 (2N3055) has thermal damage from heatsink failure. Collector-emitter saturation voltage increased from 0.4V to ~2.5V, causing voltage loss in forward drive.
+Physical Cause: Heatsink thermal compound dried out, heatsink loosened, or sustained overcurrent from blocked propeller
+
+EXPECTED SYMPTOMS:
+  - Motor accelerates slowly (upward pitch glides sluggish)
+  - Asymmetric response - faster decel than accel
+  - Reduced maximum pitch/frequency
+  - Audible asymmetry in vibrato
+
+AUDIO ANALYSIS:
+----------------------------------------
+  RMS Level: 0.4047
+  Peak Level: 0.8000
+  Crest Factor: 1.98
+  Zero Crossing Rate: 306 Hz
+  DC Offset: 0.067153
+  Noise Floor: 0.036676
+  Clipping Samples: 0
+
+AUDIO FILE: /Users/petermurphy/codingHome/PPI/emulation/musicProps/fault_injection_output/fault_burned_transistor.wav
+
+============================================================
+
+============================================================
+FAULT DIAGNOSTIC REPORT
+Generated: 2025-12-24 18:33:15
+============================================================
+
+FAULT: Degraded Op-Amp (Signal Conditioner)
+----------------------------------------
+Description: The 741 op-amp in the signal conditioning stage has degraded, causing increased noise, intermittent HF oscillation, and offset drift. This corrupts the feedback signal to the CD4046 PLL.
+Physical Cause: Age-related degradation, ESD damage to input stage, or thermal stress from nearby power components
+
+EXPECTED SYMPTOMS:
+  - Increased background noise/hiss
+  - Occasional high-frequency squealing
+  - Pitch instability from corrupted feedback
+  - Intermittent problems (comes and goes)
+
+AUDIO ANALYSIS:
+----------------------------------------
+  RMS Level: 0.4089
+  Peak Level: 0.8000
+  Crest Factor: 1.96
+  Zero Crossing Rate: 314 Hz
+  DC Offset: 0.067798
+  Noise Floor: 0.043076
+  Clipping Samples: 0
+
+AUDIO FILE: /Users/petermurphy/codingHome/PPI/emulation/musicProps/fault_injection_output/fault_noisy_op-amp.wav
+
+============================================================
+

@@ -1,0 +1,194 @@
+* AEROTONE VOICE CARD - ALL 5 FAULTS IN ONE FILE
+* Runs healthy + 5 fault variants, outputs comparison table
+
+* === POWER SUPPLIES ===
+V_supply vcc 0 DC 12
+V_logic vdd 0 DC 15
+
+* === INPUT SIGNALS ===
+V_pd pd_in 0 DC 7.5 SIN(0 0.5 220)
+V_pickup pickup 0 SIN(0 0.05 220)
+
+* ============================================================
+* HEALTHY CIRCUIT
+* ============================================================
+R3_h pd_in lf_h 100k
+C2_h lf_h 0 10u IC=7.5
+
+E_drv_h drv_h 0 lf_h 0 0.88
+R_mot_h drv_h mot_h 2
+V_bemf_h mot_h i_sense_h 5.75
+V_isense_h i_sense_h 0 DC 0
+
+E_amp_h amp_h 0 pickup 0 101
+B_cond_h cond_h 0 V=min(max(V(amp_h),-12),12)
+
+* ============================================================
+* F001: LEAKY CAPACITOR C2 (30k leakage to ground)
+* ============================================================
+R3_f1 pd_in lf_f1 100k
+C2_f1 lf_f1 leak_f1 10u IC=7.5
+R_leak_f1 leak_f1 0 30k
+
+E_drv_f1 drv_f1 0 lf_f1 0 0.88
+R_mot_f1 drv_f1 mot_f1 2
+V_bemf_f1 mot_f1 0 DC 5.75
+
+E_amp_f1 amp_f1 0 pickup 0 101
+B_cond_f1 cond_f1 0 V=min(max(V(amp_f1),-12),12)
+
+* ============================================================
+* F002: BURNED TRANSISTOR Q1 (100 ohm series resistance)
+* Current LIMITED due to high series resistance
+* ============================================================
+R3_f2 pd_in lf_f2 100k
+C2_f2 lf_f2 0 10u IC=7.5
+
+* Damaged transistor adds 100 ohm, limiting current
+E_drv_f2 drv_f2_raw 0 lf_f2 0 0.88
+R_damage_f2 drv_f2_raw drv_f2 100
+R_mot_f2 drv_f2 mot_f2 2
+V_bemf_f2 mot_f2 i_sense_f2 DC 3.5
+V_isense_f2 i_sense_f2 0 DC 0
+
+E_amp_f2 amp_f2 0 pickup 0 101
+B_cond_f2 cond_f2 0 V=min(max(V(amp_f2),-12),12)
+
+* ============================================================
+* F003: NOISY OP-AMP U2 (15kHz oscillation added)
+* ============================================================
+R3_f3 pd_in lf_f3 100k
+C2_f3 lf_f3 0 10u IC=7.5
+
+E_drv_f3 drv_f3 0 lf_f3 0 0.88
+R_mot_f3 drv_f3 mot_f3 2
+V_bemf_f3 mot_f3 0 DC 5.75
+
+E_amp_f3 amp_f3a 0 pickup 0 101
+V_noise_f3 noise_f3 0 SIN(0 3 15000)
+B_cond_f3 cond_f3 0 V=min(max(V(amp_f3a)+V(noise_f3),-14),14)
+
+* ============================================================
+* F004: OPEN FEEDBACK RESISTOR R9 (infinite gain = saturation)
+* ============================================================
+R3_f4 pd_in lf_f4 100k
+C2_f4 lf_f4 0 10u IC=7.5
+
+E_drv_f4 drv_f4 0 lf_f4 0 0.88
+R_mot_f4 drv_f4 mot_f4 2
+V_bemf_f4 mot_f4 0 DC 5.75
+
+B_cond_f4 cond_f4 0 V=12*sgn(V(pickup)+1e-6)
+
+* ============================================================
+* F005: SHORTED DIODE D2 (5 ohm parallel path)
+* Current INCREASED due to parallel short
+* ============================================================
+R3_f5 pd_in lf_f5 100k
+C2_f5 lf_f5 0 10u IC=7.5
+
+E_drv_f5 drv_f5 0 lf_f5 0 0.88
+* Short circuit path (5 ohm) in parallel with motor
+R_short_f5 drv_f5 i_sense_f5a 5
+R_mot_f5 drv_f5 mot_f5 2
+V_bemf_f5 mot_f5 i_sense_f5b DC 4.0
+* Current sensing for both paths
+V_isense_f5a i_sense_f5a 0 DC 0
+V_isense_f5b i_sense_f5b 0 DC 0
+
+E_amp_f5 amp_f5 0 pickup 0 101
+B_cond_f5 cond_f5 0 V=min(max(V(amp_f5),-12),12)
+
+* ============================================================
+* ANALYSIS
+* ============================================================
+.control
+set filetype=ascii
+tran 10u 50m UIC
+
+echo ""
+echo "=============================================="
+echo "AEROTONE SPICE FAULT SIGNATURES"
+echo "=============================================="
+echo ""
+
+* HEALTHY
+meas tran h_lf_dc AVG v(lf_h) FROM=40m TO=50m
+meas tran h_lf_rip PP v(lf_h) FROM=40m TO=50m
+meas tran h_mot_v AVG v(drv_h) FROM=40m TO=50m
+meas tran h_mot_i AVG i(V_isense_h) FROM=40m TO=50m
+meas tran h_cond_vpp PP v(cond_h) FROM=40m TO=50m
+
+echo "HEALTHY:"
+echo "  loop_filter_dc    = $&h_lf_dc V"
+echo "  loop_filter_ripple= $&h_lf_rip mV"
+echo "  motor_voltage     = $&h_mot_v V"
+echo "  motor_current     = $&h_mot_i A"
+echo "  cond_output_vpp   = $&h_cond_vpp V"
+echo ""
+
+* F001
+meas tran f1_lf_dc AVG v(lf_f1) FROM=40m TO=50m
+meas tran f1_lf_rip PP v(lf_f1) FROM=40m TO=50m
+meas tran f1_mot_v AVG v(drv_f1) FROM=40m TO=50m
+meas tran f1_cond_vpp PP v(cond_f1) FROM=40m TO=50m
+
+echo "F001 (Leaky Capacitor C2):"
+echo "  loop_filter_dc    = $&f1_lf_dc V"
+echo "  loop_filter_ripple= $&f1_lf_rip mV"
+echo "  motor_voltage     = $&f1_mot_v V"
+echo "  cond_output_vpp   = $&f1_cond_vpp V"
+echo ""
+
+* F002
+meas tran f2_lf_dc AVG v(lf_f2) FROM=40m TO=50m
+meas tran f2_mot_v AVG v(drv_f2) FROM=40m TO=50m
+meas tran f2_mot_i AVG i(V_isense_f2) FROM=40m TO=50m
+meas tran f2_cond_vpp PP v(cond_f2) FROM=40m TO=50m
+
+echo "F002 (Burned Transistor Q1):"
+echo "  loop_filter_dc    = $&f2_lf_dc V"
+echo "  motor_voltage     = $&f2_mot_v V"
+echo "  motor_current     = $&f2_mot_i A (LOW - series resistance)"
+echo "  cond_output_vpp   = $&f2_cond_vpp V"
+echo ""
+
+* F003
+meas tran f3_lf_dc AVG v(lf_f3) FROM=40m TO=50m
+meas tran f3_mot_v AVG v(drv_f3) FROM=40m TO=50m
+meas tran f3_cond_vpp PP v(cond_f3) FROM=40m TO=50m
+
+echo "F003 (Noisy Op-Amp U2):"
+echo "  loop_filter_dc    = $&f3_lf_dc V"
+echo "  motor_voltage     = $&f3_mot_v V"
+echo "  cond_output_vpp   = $&f3_cond_vpp V"
+echo ""
+
+* F004
+meas tran f4_lf_dc AVG v(lf_f4) FROM=40m TO=50m
+meas tran f4_mot_v AVG v(drv_f4) FROM=40m TO=50m
+meas tran f4_cond_vpp PP v(cond_f4) FROM=40m TO=50m
+
+echo "F004 (Open Resistor R9):"
+echo "  loop_filter_dc    = $&f4_lf_dc V"
+echo "  motor_voltage     = $&f4_mot_v V"
+echo "  cond_output_vpp   = $&f4_cond_vpp V"
+echo ""
+
+* F005 - total current = short path + motor path
+meas tran f5_lf_dc AVG v(lf_f5) FROM=40m TO=50m
+meas tran f5_mot_v AVG v(drv_f5) FROM=40m TO=50m
+meas tran f5_i_short AVG i(V_isense_f5a) FROM=40m TO=50m
+meas tran f5_i_motor AVG i(V_isense_f5b) FROM=40m TO=50m
+meas tran f5_cond_vpp PP v(cond_f5) FROM=40m TO=50m
+
+let f5_total_i = abs(f5_i_short) + abs(f5_i_motor)
+
+echo "F005 (Shorted Diode D2):"
+echo "  loop_filter_dc    = $&f5_lf_dc V"
+echo "  motor_voltage     = $&f5_mot_v V"
+echo "  motor_current     = $&f5_total_i A (HIGH - parallel short)"
+echo "  cond_output_vpp   = $&f5_cond_vpp V"
+
+.endc
+.end

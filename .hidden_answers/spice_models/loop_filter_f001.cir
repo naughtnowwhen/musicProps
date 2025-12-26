@@ -1,0 +1,49 @@
+* AeroTone Loop Filter - F001 LEAKY CAPACITOR FAULT
+*
+* Models a degraded electrolytic capacitor with:
+* 1. Parallel leakage resistance (Rleak) - simulates DC leakage
+* 2. Increased ESR - simulates aged capacitor
+*
+* A healthy 10uF electrolytic has:
+*   - Leakage current ~1-10uA at rated voltage
+*   - ESR ~0.1-1 ohm
+*
+* A FAULTY leaky capacitor has:
+*   - Leakage current 100uA-1mA (10-100x worse)
+*   - This is modeled as Rleak = V/I = 15V/500uA = 30k parallel resistance
+*   - ESR may increase to 5-10 ohms
+
+.param R1=100k
+.param C1=10u
+.param R2=10k
+.param C2=100n
+
+* FAULT PARAMETERS
+.param Rleak=30k   ; Leakage resistance (30k gives ~500uA at 15V)
+.param ESR=5       ; Increased ESR
+
+V_supply vdd 0 DC 15
+Vin in 0 PULSE(0 10 0 1u 1u 5m 10m)
+
+R1 in node1 {R1}
+R2 node1 out {R2}
+
+* FAULTY CAPACITOR: C1 with leakage resistor in parallel and ESR in series
+R_esr out cap_internal {ESR}
+C1 cap_internal 0 {C1} IC=0
+R_leak cap_internal 0 {Rleak}
+
+C2 node1 0 {C2}
+
+.control
+set filetype=ascii
+
+; Test: Step response with leaky capacitor
+tran 10u 200m UIC
+wrdata loop_filter_f001.dat v(out) v(in) v(cap_internal)
+
+print v(out) at 200m
+print v(cap_internal) at 200m
+.endc
+
+.end

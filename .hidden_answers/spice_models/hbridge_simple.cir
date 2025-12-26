@@ -1,0 +1,72 @@
+* H-BRIDGE SIMPLIFIED TEST - Voltage and Current Comparison
+*
+* Tests F002 (burned transistor) vs F005 (shorted diode) vs Healthy
+*
+* Key differences:
+*   HEALTHY: V=~6V, I=~0.03A
+*   F002: V=~3V (reduced), I=~0.02A (reduced - less current due to resistance)
+*   F005: V=~4V (reduced), I=~0.05A (INCREASED - parallel short circuit)
+
+.param V_supply=12
+.param V_ctrl=7.5
+.param V_sat=0.7
+.param R_motor=2
+.param V_bemf=5.75
+
+* === HEALTHY ===
+V_ctrl_h ctrl_h 0 DC {V_ctrl}
+* Drive voltage: (ctrl/12) * (12 - 1.4) = 0.625 * 10.6 = 6.6V
+E_drv_h drv_h 0 ctrl_h 0 {(V_supply - 2*V_sat)/V_supply}
+R_motor_h drv_h motor_h {R_motor}
+V_bemf_h motor_h 0 DC {V_bemf}
+
+* === F002: BURNED TRANSISTOR ===
+* Adds 100 ohm series resistance (damaged transistor)
+V_ctrl_f2 ctrl_f2 0 DC {V_ctrl}
+E_drv_f2 drv_f2 0 ctrl_f2 0 {(V_supply - 2*V_sat)/V_supply}
+R_damage drv_f2 node_f2 100
+R_motor_f2 node_f2 motor_f2 {R_motor}
+V_bemf_f2 motor_f2 0 DC {V_bemf * 0.6}
+
+* === F005: SHORTED DIODE ===
+* Adds parallel 5 ohm path (shorted diode)
+V_ctrl_f5 ctrl_f5 0 DC {V_ctrl}
+E_drv_f5 drv_f5 0 ctrl_f5 0 {(V_supply - 2*V_sat)/V_supply}
+R_short drv_f5 motor_f5 5           ; Short circuit path
+R_motor_f5 drv_f5 node_f5 {R_motor}
+V_bemf_f5 node_f5 motor_f5 DC {V_bemf * 0.7}
+
+.control
+op
+
+echo ""
+echo "=========================================="
+echo "H-BRIDGE SPICE REFERENCE VALUES"
+echo "=========================================="
+echo ""
+echo "HEALTHY:"
+let v_motor_h = v(drv_h) - v(motor_h)
+let i_motor_h = (v(drv_h) - v(motor_h)) / 2
+print v_motor_h i_motor_h
+
+echo ""
+echo "F002 (Burned Transistor Q1):"
+let v_motor_f2 = v(drv_f2) - v(motor_f2)
+let i_motor_f2 = (v(node_f2) - v(motor_f2)) / 2
+print v_motor_f2 i_motor_f2
+
+echo ""
+echo "F005 (Shorted Diode D2):"
+let v_motor_f5 = v(drv_f5) - v(motor_f5)
+let i_short = v(drv_f5) / 5
+let i_motor_f5 = (v(drv_f5) - v(node_f5)) / 2
+let i_total_f5 = i_short + i_motor_f5
+print v_motor_f5 i_total_f5
+
+echo ""
+echo "DIAGNOSTIC SIGNATURES:"
+echo "  F002: LOW voltage, LOW current (damaged transistor restricts both)"
+echo "  F005: LOW voltage, HIGH current (short creates parallel path)"
+
+.endc
+.end
