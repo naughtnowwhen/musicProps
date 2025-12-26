@@ -1,0 +1,68 @@
+* COMPONENT BREAK TEST: R_VG1_OPEN
+.INCLUDE real_components.lib
+
+V_SUPPLY vcc 0 DC 12
+V_LOGIC vdd 0 DC 15
+
+V_REF ref_in 0 PULSE(0 15 0 10N 10N 2.27M 4.545M)
+V_TACH tach_raw 0 SIN(0 50M 220 0 0)
+
+* Virtual ground - R_VG1 OPEN (100MEG instead of 10K)
+R_VG1 vdd vgnd 100MEG
+R_VG2 vgnd 0 10K
+C_BIAS vgnd 0 10U IC=0
+
+C_AC tach_raw tach_ac 1U
+R8 tach_ac opamp_inn 1K
+R9 opamp_inn cond_pre 100K
+
+X_U2 vgnd opamp_inn vdd 0 cond_pre LM358
+B_COND cond_out 0 V=V(cond_pre)
+
+X_C3 vdd 0 CAP_CER_100N
+
+X_COMP_INV1 cond_out comp_int vdd 0 CMOS_INV
+X_COMP_INV2 comp_int comp_out vdd 0 CMOS_INV
+
+X_PC1 ref_in comp_out vdd 0 pd_out CD4046_PC1
+
+R3 pd_out loop_filt 100K
+X_C2 loop_filt c2_mid CAP_ELEC_10U
+R_C2_LEAK c2_mid 0 100MEG
+
+R_DRIVE1 loop_filt base_q1 1K
+R_DRIVE2 loop_filt base_q2 1K
+R_BIAS1 vcc base_q1 4.7K
+R_BIAS2 base_q2 0 4.7K
+
+Q1 vcc base_q1 q1_emit 2N3055
+R_Q1_DAMAGE q1_emit motor_p 0.01
+Q2 motor_n base_q2 0 MJ2955
+
+R_DRIVE3 loop_filt base_q3 1K
+R_DRIVE4 loop_filt base_q4 1K
+R_BIAS3 vcc base_q3 4.7K
+R_BIAS4 base_q4 0 4.7K
+
+Q3 vcc base_q3 motor_n 2N3055
+Q4 motor_p base_q4 0 MJ2955
+
+D1 motor_p vcc 1N4001
+D2 0 motor_p 1N4001
+D3 motor_n vcc 1N4001
+D4 0 motor_n 1N4001
+
+R_MOTOR motor_p motor_bemf 20
+V_BEMF motor_bemf motor_n DC 0
+R_SENSE motor_n motor_gnd 0.1
+V_SENSE motor_gnd 0 DC 0
+
+.OPTIONS RELTOL=0.01 ABSTOL=1N VNTOL=1M ITL1=500 ITL4=100
+
+.CONTROL
+set filetype=ascii
+TRAN 1U 100M UIC
+WRDATA R_VG1_OPEN.dat V(loop_filt) V(motor_p,motor_n) I(V_SENSE) V(cond_out) V(cond_pre) V(opamp_inn) V(vgnd) V(tach_ac)
+ECHO "R_VG1_OPEN complete"
+.ENDC
+.END
