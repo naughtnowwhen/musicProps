@@ -1,0 +1,42 @@
+* AeroTone - Single Note Simulation
+.INCLUDE real_components.lib
+
+* Power supplies
+V_SUPPLY vcc 0 DC 12
+V_LOGIC vdd 0 DC 15
+
+* Reference signal at 220.0Hz
+V_REF ref_in 0 PULSE(0 15 0 10N 10N 2.272727272727273M 4.545454545454546M)
+
+* Tach feedback (simplified - matches reference for locked PLL)
+V_TACH tach_raw 0 SIN(0 50M 220.0 0 0)
+
+* Virtual ground for op-amp
+R_VG1 vdd vgnd 10K
+R_VG2 vgnd 0 10K
+C_BIAS vgnd 0 10U IC=7.5
+
+* Signal conditioner
+C_AC tach_raw tach_ac 1U
+R8 tach_ac opamp_inn 1K
+R9 opamp_inn cond_out 100K
+X_U2 vgnd opamp_inn vdd 0 cond_out LM358
+
+* Phase detector (simplified XOR)
+B_PD pd_out 0 V=abs(V(ref_in)-V(cond_out))/15 * 15
+
+* Loop filter
+R3 pd_out loop_filt 100K
+X_C2 loop_filt 0 CAP_ELEC_10U
+
+* Motor model (simplified)
+R_MOTOR loop_filt motor_out 20
+C_MOTOR motor_out 0 100U IC=0
+
+.OPTIONS RELTOL=0.01 ABSTOL=1N VNTOL=1M
+.CONTROL
+set filetype=ascii
+TRAN 10U 30M UIC
+WRDATA note_220.dat V(loop_filt) V(cond_out) V(motor_out)
+.ENDC
+.END
