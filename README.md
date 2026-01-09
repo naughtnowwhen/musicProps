@@ -174,7 +174,69 @@ Fault signatures derived from ngspice simulations serve as ground truth:
 
 ## LLM Fault Diagnosis Challenge
 
-The project includes a benchmark for evaluating LLM reasoning on blind circuit troubleshooting:
+The project includes an **adversarial multi-agent evaluation system** for testing LLM reasoning on blind circuit troubleshooting.
+
+### The Architecture: Author vs Troubleshooter
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        HIDDEN SIDE (Author)                             │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐     │
+│  │  Fault Pool     │───▶│  Challenge      │───▶│  Encrypted      │     │
+│  │  (6 fault types)│    │  Generator      │    │  Answer File    │     │
+│  └─────────────────┘    └────────┬────────┘    └─────────────────┘     │
+│                                  │                                      │
+│                                  │ inject fault                         │
+│                                  ▼                                      │
+│                         ┌─────────────────┐                            │
+│                         │  Faulty Circuit │                            │
+│                         │  (running)      │                            │
+│                         └────────┬────────┘                            │
+├──────────────────────────────────┼──────────────────────────────────────┤
+│           ████████  FIREWALL  ████████                                  │
+│           "DO NOT READ ANY FILES"                                       │
+│           Only probe measurements allowed                               │
+├──────────────────────────────────┼──────────────────────────────────────┤
+│                                  │ probe interface only                 │
+│                                  ▼                                      │
+│                        BLIND SIDE (Troubleshooter)                      │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐     │
+│  │  99 Probe       │───▶│  LLM Agent      │───▶│  Diagnosis      │     │
+│  │  Points         │    │  (reasoning)    │    │  Submission     │     │
+│  └─────────────────┘    └─────────────────┘    └─────────────────┘     │
+│                                                                         │
+│  Available: VDC, VAC, frequency, waveform capture                      │
+│  NOT available: Source code, fault type, answer file                   │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### How It Works
+
+**1. Challenge Generator (Hidden Side)**
+- Randomly selects a fault from a pool of 6 failure modes
+- Injects the fault into a running circuit simulation
+- Encrypts and hides the answer (base64 obfuscation)
+- Exposes ONLY a probe measurement interface
+
+**2. The Firewall**
+- Strict rule: **"DO NOT READ ANY FILES IN THIS DIRECTORY"**
+- The troubleshooter agent is intentionally blind
+- Reading source files is "cheating" and invalidates results
+- Only interaction is through measurement API
+
+**3. Troubleshooter (Blind Side)**
+- Receives circuit documentation and healthy reference values
+- Can probe 99 test points (IC pins, component terminals)
+- Must reason systematically from measurements alone
+- Submits diagnosis without ever seeing the fault injection code
+
+### Why This Matters
+
+This architecture tests **genuine reasoning ability**:
+- The agent can't pattern-match on fault injection code
+- Must understand circuit theory to interpret measurements
+- Must differentiate similar symptoms (F002 vs F005 both show low voltage)
+- Success requires systematic diagnostic methodology
 
 ### Results (December 2025)
 
@@ -186,17 +248,22 @@ The project includes a benchmark for evaluating LLM reasoning on blind circuit t
 
 **Key Finding:** When given equivalent documentation, open-source reasoning models match proprietary model performance. Initial poor results were due to insufficient context, not model capability.
 
-### Challenge Structure
+### Running a Challenge
 
-Each challenge provides:
-- Pre-captured circuit measurements (power rails, loop filter, motor, conditioner)
-- Probe tool access for specific test points
-- Complete circuit documentation and fault signature reference
+```bash
+# Generate a new challenge (hidden side)
+python .hidden_answers/challenge_generator.py --difficulty medium
 
-The model must:
-1. Analyze measurements systematically
-2. Compare against expected healthy values
-3. Identify the specific faulty component
+# Troubleshoot (blind side) - agent uses ONLY this interface
+python .hidden_answers/troubleshoot.py <challenge_id>
+
+# Or via API
+curl -X POST http://localhost:5001/challenge/new
+curl http://localhost:5001/challenge/{id}/healthy
+curl http://localhost:5001/challenge/{id}/faulty
+curl -X POST http://localhost:5001/challenge/{id}/diagnose \
+  -d '{"component": "C2"}'
+```
 
 ## Available Notes
 
