@@ -1,16 +1,38 @@
 # AeroTone Model 12
 
-A SPICE-level emulation of a fictional 1979 electromechanical musical instrument that generates tones using spinning propellers.
+An adversarial multi-agent benchmark for LLM reasoning, built on a SPICE-level circuit simulation.
 
 ## Overview
 
-The AeroTone Model 12 is a complete physics simulation of a 12-voice polyphonic synthesizer where sound is produced by motor-driven propellers. Unlike conventional synthesizers, pitch is determined by propeller RPM (blade passage frequency), creating an instrument where **glissando is the natural state** and discrete notes require active control system intervention.
+This project is an **adversarial evaluation system** where one agent injects faults into a circuit, and another agent must diagnose them *blind* - without access to the source code, only through probe measurements and reasoning.
 
-This project demonstrates:
-- **Circuit-level simulation** of 1979-era analog electronics (PLL, H-bridge motor drivers, op-amp signal conditioning)
-- **Unified SPICE-Python pipeline** where physics simulation directly generates audio
-- **LLM fault diagnosis benchmarking** with validated test cases
-- **Advanced acoustic synthesis** modeling real propeller aeroacoustics
+```
+┌────────────────────────────┐
+│  AUTHOR (Hidden Side)      │  Injects faults, encrypts answers
+├────────────────────────────┤
+│  ████  FIREWALL  ████      │  "DO NOT READ ANY FILES"
+├────────────────────────────┤
+│  TROUBLESHOOTER (Blind)    │  Can ONLY probe measurements, must reason
+└────────────────────────────┘
+```
+
+**The key insight:** By preventing the troubleshooting agent from seeing the fault injection code, we test *genuine reasoning ability* - not pattern matching. The agent must understand circuit theory, interpret measurements, and systematically diagnose failures.
+
+### The Test Bed: AeroTone Model 12
+
+The circuit being diagnosed is a complete physics simulation of a fictional 1979 electromechanical musical instrument - a 12-voice synthesizer where sound is produced by motor-driven propellers. This provides:
+
+- **Rich failure modes** - capacitors, transistors, op-amps, diodes can all fail differently
+- **Measurable symptoms** - voltage, current, frequency, waveform shape all change
+- **Ambiguous signatures** - multiple faults can produce similar symptoms (testing differential diagnosis)
+- **Domain complexity** - requires understanding PLL control, motor physics, signal conditioning
+
+### What This Project Demonstrates
+
+1. **Adversarial agent evaluation** - Author vs Troubleshooter across a firewall
+2. **Circuit-level simulation** of 1979-era analog electronics
+3. **Unified SPICE-Python pipeline** where physics generates audio directly
+4. **Validated fault signatures** from ngspice as ground truth
 
 ## The Core Concept
 
